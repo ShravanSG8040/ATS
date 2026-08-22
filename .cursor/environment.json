@@ -1,6 +1,6 @@
 {
   "name": "ATS",
-  "install": "npm ci && npx prisma db push && npm run db:seed",
+  "install": "npm ci\nnpx prisma db push\nnpm run db:seed",
   "terminals": [
     {
       "name": "dev-server",
