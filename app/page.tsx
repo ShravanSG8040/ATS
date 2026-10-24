@@ -1,164 +1,117 @@
+import type { CSSProperties } from "react";
+import Link from "next/link";
+import { JobRow } from "@/components/JobRow";
+import { PipelineBoard } from "@/components/PipelineBoard";
+import { plural } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
 
-async function createJob(formData: FormData) {
-  "use server";
-
-  const title = String(formData.get("title") ?? "").trim();
-  const department = String(formData.get("department") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-
-  if (!title || !department || !location || !description) {
-    return;
-  }
-
-  await prisma.job.create({
-    data: { title, department, location, description },
-  });
-
-  revalidatePath("/");
-}
-
-async function submitApplication(formData: FormData) {
-  "use server";
-
-  const jobId = String(formData.get("jobId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim();
-  const resumeUrl = String(formData.get("resumeUrl") ?? "").trim();
-
-  if (!jobId || !name || !email) {
-    return;
-  }
-
-  await prisma.application.create({
-    data: {
-      jobId,
-      name,
-      email,
-      resumeUrl: resumeUrl || null,
-    },
-  });
-
-  revalidatePath("/");
-}
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [jobs, applications] = await Promise.all([
+  const [jobs, jobCount, departments] = await Promise.all([
     prisma.job.findMany({
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { applications: true } } },
+      take: 4,
     }),
-    prisma.application.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { job: true },
-      take: 10,
-    }),
+    prisma.job.count(),
+    prisma.job.findMany({ distinct: ["department"], select: { department: true } }),
   ]);
 
   return (
-    <main>
-      <header>
-        <h1>ATS</h1>
-        <p>Applicant Tracking System for posting jobs and reviewing applications.</p>
-      </header>
+    <>
+      <div className="container">
+        <section className="hero">
+          <div>
+            <h1 className="hero-title reveal">Hiring, in plain sight.</h1>
+            <p className="hero-lede reveal" style={{ "--d": "0.08s" } as CSSProperties}>
+              Talentifyx keeps every opening and every applicant in one place. Find your next role and apply in
+              minutes, or follow each candidate from application to offer.
+            </p>
+            <div className="hero-actions reveal" style={{ "--d": "0.16s" } as CSSProperties}>
+              <Link href="/jobs" className="btn btn-primary">
+                Browse open roles
+              </Link>
+              <Link href="/dashboard" className="btn btn-secondary">
+                Open recruiter dashboard
+              </Link>
+            </div>
+            {jobCount > 0 && (
+              <p className="hero-stat reveal" style={{ "--d": "0.24s" } as CSSProperties}>
+                <strong>{plural(jobCount, "open role")}</strong> across{" "}
+                <strong>{plural(departments.length, "team")}</strong> right now.
+              </p>
+            )}
+          </div>
+          <PipelineBoard />
+        </section>
+      </div>
 
-      <section>
-        <h2>Open Positions</h2>
-        <div className="job-list">
+      <div className="container">
+        <section className="section" aria-labelledby="paths-title">
+          <h2 id="paths-title" className="visually-hidden">
+            Choose your path
+          </h2>
+          <div className="paths">
+            <div className="path path-seeker">
+              <h3 className="path-title">Looking for a job</h3>
+              <p className="path-text">
+                Search openings by title, team or location, read the full role, and send your application without
+                creating an account.
+              </p>
+              <ul className="path-list">
+                <li>Filter roles by team and location</li>
+                <li>Apply with your name, email and a link to your résumé</li>
+              </ul>
+              <Link href="/jobs" className="btn btn-primary">
+                Find a role
+              </Link>
+            </div>
+            <div className="path path-recruiter">
+              <h3 className="path-title">Hiring for your team</h3>
+              <p className="path-text">
+                Post a role in under a minute, see where every applicant stands, and move them through screening,
+                interviews and offers.
+              </p>
+              <ul className="path-list">
+                <li>Pipeline overview across all roles</li>
+                <li>Change an applicant&apos;s stage straight from the list</li>
+              </ul>
+              <Link href="/dashboard" className="btn btn-primary">
+                Go to dashboard
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" aria-labelledby="latest-title">
+          <div className="section-head">
+            <h2 id="latest-title" className="section-title">
+              Latest openings
+            </h2>
+            {jobCount > jobs.length && (
+              <Link href="/jobs" className="btn btn-ghost btn-sm">
+                See all {jobCount} roles
+              </Link>
+            )}
+          </div>
           {jobs.length === 0 ? (
-            <p className="empty">No jobs posted yet.</p>
+            <div className="empty-state">
+              <h3>No roles are open yet</h3>
+              <p className="muted">Recruiters can post the first one from the dashboard.</p>
+              <Link href="/dashboard/jobs/new" className="btn btn-secondary btn-sm">
+                Post a job
+              </Link>
+            </div>
           ) : (
-            jobs.map((job) => (
-              <article className="job-card" key={job.id}>
-                <h3>{job.title}</h3>
-                <p className="meta">
-                  {job.department} · {job.location} · {job._count.applications} application
-                  {job._count.applications === 1 ? "" : "s"}
-                </p>
-                <p>{job.description}</p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section>
-        <h2>Post a Job</h2>
-        <form action={createJob}>
-          <label>
-            Title
-            <input name="title" required />
-          </label>
-          <label>
-            Department
-            <input name="department" required />
-          </label>
-          <label>
-            Location
-            <input name="location" required />
-          </label>
-          <label>
-            Description
-            <textarea name="description" rows={3} required />
-          </label>
-          <button type="submit">Create Job</button>
-        </form>
-      </section>
-
-      <section>
-        <h2>Submit Application</h2>
-        <form action={submitApplication}>
-          <label>
-            Job
-            <select name="jobId" required defaultValue="">
-              <option value="" disabled>
-                Select a job
-              </option>
+            <ul className="job-rows">
               {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title}
-                </option>
+                <JobRow key={job.id} job={job} />
               ))}
-            </select>
-          </label>
-          <label>
-            Name
-            <input name="name" required />
-          </label>
-          <label>
-            Email
-            <input name="email" type="email" required />
-          </label>
-          <label>
-            Resume URL
-            <input name="resumeUrl" type="url" placeholder="https://example.com/resume.pdf" />
-          </label>
-          <button type="submit">Submit Application</button>
-        </form>
-      </section>
-
-      <section>
-        <h2>Recent Applications</h2>
-        <div className="application-list">
-          {applications.length === 0 ? (
-            <p className="empty">No applications submitted yet.</p>
-          ) : (
-            applications.map((application) => (
-              <div className="application-item" key={application.id}>
-                <div>
-                  <strong>{application.name}</strong>
-                  <div className="meta">
-                    {application.email} · applied to {application.job.title}
-                  </div>
-                </div>
-                <span className="status">{application.status}</span>
-              </div>
-            ))
+            </ul>
           )}
-        </div>
-      </section>
-    </main>
+        </section>
+      </div>
+    </>
   );
 }
