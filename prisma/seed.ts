@@ -51,7 +51,7 @@ async function main() {
     return;
   }
 
-  const jobs = [];
+  const jobs: any[] = [];
   for (const job of JOBS) {
     jobs.push(await prisma.job.create({ data: job }));
   }
